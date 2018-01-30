@@ -71,9 +71,11 @@ void SystemControl_::releaseAll(void) {
 }
 
 void SystemControl_::press(uint8_t s) {
+/*
   if (s == HID_SYSTEM_WAKE_UP)
     USBDevice.wakeupHost();
   else
+  */
     sendReport(&s, sizeof(s));
 }
 

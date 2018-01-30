@@ -25,7 +25,7 @@ THE SOFTWARE.
 #pragma once
 
 #include <Arduino.h>
-#include "PluggableUSB.h"
+#include "USB/PluggableUSB.h"
 #include "HID.h"
 #include "HID-Settings.h"
 
@@ -59,7 +59,8 @@ class Keyboard_ {
   boolean isModifierActive(uint8_t k);
   boolean wasModifierActive(uint8_t k);
 
-  uint8_t getLEDs() { return HID().getLEDs(); };
+ // uint8_t getLEDs() { return HID().getLEDs(); };
+  uint8_t getLEDs() { return 0; };
 
   HID_KeyboardReport_Data_t keyReport;
   HID_KeyboardReport_Data_t lastKeyReport;

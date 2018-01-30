@@ -25,7 +25,7 @@ THE SOFTWARE.
 #pragma once
 
 #include <Arduino.h>
-#include "PluggableUSB.h"
+#include "USB/PluggableUSB.h"
 #include "HID.h"
 #include "HID-Settings.h"
 #include "MouseButtons.h"
