@@ -49,4 +49,4 @@ THE SOFTWARE.
 
 #include "SingleReport/SingleAbsoluteMouse.h"
 
-//#include "BootKeyboard/BootKeyboard.h"
+#include "BootKeyboard/BootKeyboard.h"

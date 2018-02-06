@@ -69,7 +69,11 @@ class BootKeyboard_ : public PluggableUSBModule {
   int getDescriptor(USBSetup& setup);
   bool setup(USBSetup& setup);
 
-  uint8_t epType[1];
+  #ifdef __SAMD21G18A__
+	uint32_t epType[1];
+  #else
+	uint8_t epType[1];
+  #endif
   uint8_t protocol;
   uint8_t idle;
 

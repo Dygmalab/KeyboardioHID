@@ -23,6 +23,16 @@ THE SOFTWARE.
 
 #include "SingleAbsoluteMouse.h"
 
+#ifdef __SAMD21G18A__
+	#define USB_SendControl 		USBDevice.sendControl
+	#define USB_Send				USBDevice.send
+	#define EP_TYPE_INTERRUPT_IN 	(USB_ENDPOINT_TYPE_INTERRUPT | USB_ENDPOINT_IN(0))
+	#define USB_EP_SIZE				(64)
+	#define TRANSFER_PGM			0x80
+	#define TRANSFER_RELEASE		0x40
+	#define TRANSFER_ZERO			0x20
+#endif
+
 static const uint8_t _hidSingleReportDescriptorAbsoluteMouse[] PROGMEM = {
     D_USAGE_PAGE, D_PAGE_GENERIC_DESKTOP,         /* USAGE_PAGE (Generic Desktop)         54 */
     D_USAGE, D_USAGE_MOUSE,                             /* USAGE (Mouse) */

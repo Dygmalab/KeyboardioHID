@@ -61,6 +61,16 @@ static const uint8_t _hidReportDescriptorKeyboard[] PROGMEM = {
   0xc0                            /* END_COLLECTION */
 };
 
+#ifdef __SAMD21G18A__
+	#define USB_SendControl 		USBDevice.sendControl
+	#define USB_Send				USBDevice.send
+	#define EP_TYPE_INTERRUPT_IN 	(USB_ENDPOINT_TYPE_INTERRUPT | USB_ENDPOINT_IN(0))
+	#define USB_EP_SIZE				(64)
+	#define TRANSFER_PGM			0x80
+	#define TRANSFER_RELEASE		0x40
+	#define TRANSFER_ZERO			0x20
+#endif
+
 BootKeyboard_::BootKeyboard_(void) : PluggableUSBModule(1, 1, epType), protocol(HID_REPORT_PROTOCOL), idle(1), leds(0) {
   epType[0] = EP_TYPE_INTERRUPT_IN;
   PluggableUSB().plug(this);
@@ -129,12 +139,19 @@ bool BootKeyboard_::setup(USBSetup& setup) {
     }
     if (request == HID_GET_PROTOCOL) {
       // TODO improve
-      UEDATX = protocol;
+	  #ifndef __SAMD21G18A__
+        UEDATX = protocol;
+	  #endif
       return true;
     }
     if (request == HID_GET_IDLE) {
       // TODO improve
-      UEDATX = idle;
+	  #ifdef __SAMD21G18A__
+		USBDevice.armSend(0, &idle, 1);
+	  #else
+        UEDATX = idle;
+	  #endif
+	  
       return true;
     }
   }
@@ -150,6 +167,7 @@ bool BootKeyboard_::setup(USBSetup& setup) {
     }
     if (request == HID_SET_REPORT) {
       // Check if data has the correct length afterwards
+	  #ifndef __SAMD21G18A__
       int length = setup.wLength;
 
       if (setup.wValueH == HID_REPORT_TYPE_OUTPUT) {
@@ -166,6 +184,7 @@ bool BootKeyboard_::setup(USBSetup& setup) {
           return true;
         }
       }
+		#endif
     }
   }
 
