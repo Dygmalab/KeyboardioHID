@@ -51,62 +51,24 @@ static const uint8_t _hidMultiReportDescriptorKeyboard[] PROGMEM = {
   D_REPORT_SIZE, 0x01,
   D_OUTPUT, (D_DATA | D_VARIABLE | D_ABSOLUTE),
 
-// USB Code not within 4-49 (0x4-0x31), 51-155 (0x33-0x9B), 157-164 (0x9D-0xA4),
-// 176-221 (0xB0-0xDD) or 224-231 (0xE0-0xE7) NKRO Mode
   /* NKRO Keyboard */
   D_USAGE_PAGE, D_PAGE_KEYBOARD,
 
-  // Padding 3 bits
-  // To skip HID_KEYBOARD_NON_US_POUND_AND_TILDE, which causes
-  // Linux to choke on our driver.
+  // Padding 4 bits, to skip NO_EVENT & 3 error states.
   D_REPORT_SIZE, 0x04,
   D_REPORT_COUNT, 0x01,
   D_INPUT, (D_CONSTANT),
 
-
   D_USAGE_MINIMUM, HID_KEYBOARD_A_AND_A,
-  D_USAGE_MAXIMUM, HID_KEYBOARD_BACKSLASH_AND_PIPE,
+  D_USAGE_MAXIMUM, HID_LAST_KEY,
   D_LOGICAL_MINIMUM, 0x00,
   D_LOGICAL_MAXIMUM, 0x01,
   D_REPORT_SIZE, 0x01,
-  D_REPORT_COUNT, (HID_KEYBOARD_BACKSLASH_AND_PIPE - HID_KEYBOARD_A_AND_A)+1,
+  D_REPORT_COUNT, (HID_LAST_KEY - HID_KEYBOARD_A_AND_A),
   D_INPUT, (D_DATA|D_VARIABLE|D_ABSOLUTE),
 
-  // Padding 1 bit.
-  // To skip HID_KEYBOARD_NON_US_POUND_AND_TILDE, which causes
-  // Linux to choke on our driver.
-  D_REPORT_SIZE, 0x01,
-  D_REPORT_COUNT, 0x01,
-  D_INPUT, (D_CONSTANT),
-
-
-  D_USAGE_MINIMUM, HID_KEYBOARD_SEMICOLON_AND_COLON,
-  D_USAGE_MAXIMUM, HID_KEYBOARD_CANCEL,
-  D_LOGICAL_MINIMUM, 0x00,
-  D_LOGICAL_MAXIMUM, 0x01,
-  D_REPORT_SIZE, 0x01,
-  D_REPORT_COUNT, (HID_KEYBOARD_CANCEL-HID_KEYBOARD_SEMICOLON_AND_COLON) +1,
-  D_INPUT, (D_DATA|D_VARIABLE|D_ABSOLUTE),
-
-
-  // Padding 1 bit.
-  // To skip HID_KEYBOARD_CLEAR, which causes
-  // Linux to choke on our driver.
-  D_REPORT_SIZE, 0x01,
-  D_REPORT_COUNT, 0x01,
-  D_INPUT, (D_CONSTANT),
-
-  D_USAGE_MINIMUM, HID_KEYBOARD_PRIOR,
-  D_USAGE_MAXIMUM, HID_KEYPAD_HEXADECIMAL,
-  D_LOGICAL_MINIMUM, 0x00,
-  D_LOGICAL_MAXIMUM, 0x01,
-  D_REPORT_SIZE, 0x01,
-  D_REPORT_COUNT, (HID_KEYPAD_HEXADECIMAL - HID_KEYBOARD_PRIOR)  +1,
-  D_INPUT, (D_DATA|D_VARIABLE|D_ABSOLUTE),
-
-
-  // Padding (w bits)
-  D_REPORT_SIZE, 0x02,
+  // Padding (3 bits) to round up the report to byte boundary.
+  D_REPORT_SIZE, 0x03,
   D_REPORT_COUNT, 0x01,
   D_INPUT, (D_CONSTANT),
 
@@ -139,6 +101,18 @@ int Keyboard_::sendReportUnchecked(void) {
 
 
 int Keyboard_::sendReport(void) {
+  // ChromeOS 51-60 (at least) bug: if a modifier and a normal keycode are added in the
+  // same report, in some cases the shift is not applied (e.g. `shift`+`[` doesn't yield
+  // `{`). To compensate for this, check to see if the modifier byte has changed. If so,
+  // copy the modifier byte to the previous key report, and resend it before proceeding.
+  if (lastKeyReport.modifiers != keyReport.modifiers) {
+    uint8_t last_mods = lastKeyReport.modifiers;
+    lastKeyReport.modifiers = keyReport.modifiers;
+    int returnCode = HID().SendReport(HID_REPORTID_NKRO_KEYBOARD, &lastKeyReport, sizeof(lastKeyReport));
+    if (returnCode < 0)
+      lastKeyReport.modifiers = last_mods;
+  }
+
   // If the last report is different than the current report, then we need to send a report.
   // We guard sendReport like this so that calling code doesn't end up spamming the host with empty reports
   // if sendReport is called in a tight loop.
@@ -146,7 +120,8 @@ int Keyboard_::sendReport(void) {
   if (memcmp(lastKeyReport.allkeys, keyReport.allkeys, sizeof(keyReport))) {
     // if the two reports are different, send a report
     int returnCode = sendReportUnchecked();
-    memcpy(lastKeyReport.allkeys, keyReport.allkeys, sizeof(keyReport));
+    if (returnCode > 0)
+      memcpy(lastKeyReport.allkeys, keyReport.allkeys, sizeof(keyReport));
     return returnCode;
   }
   return -1;

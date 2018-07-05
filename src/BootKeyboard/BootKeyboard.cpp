@@ -22,43 +22,52 @@ THE SOFTWARE.
 */
 
 #include "BootKeyboard.h"
+#include "DescriptorPrimitives.h"
 
+// See Appendix B of USB HID spec
 static const uint8_t _hidReportDescriptorKeyboard[] PROGMEM = {
   //  Keyboard
-  0x05, 0x01,                      /* USAGE_PAGE (Generic Desktop)	  47 */
-  0x09, 0x06,                      /* USAGE (Keyboard) */
-  0xa1, 0x01,                      /* COLLECTION (Application) */
-  0x05, 0x07,                      /*   USAGE_PAGE (Keyboard) */
+  D_USAGE_PAGE, D_PAGE_GENERIC_DESKTOP,
+  D_USAGE, D_USAGE_KEYBOARD,
 
-  /* Keyboard Modifiers (shift, alt, ...) */
-  0x19, 0xe0,                      /*   USAGE_MINIMUM (Keyboard LeftControl) */
-  0x29, 0xe7,                      /*   USAGE_MAXIMUM (Keyboard Right GUI) */
-  0x15, 0x00,                      /*   LOGICAL_MINIMUM (0) */
-  0x25, 0x01,                      /*   LOGICAL_MAXIMUM (1) */
-  0x75, 0x01,                      /*   REPORT_SIZE (1) */
-  0x95, 0x08,                      /*   REPORT_COUNT (8) */
-  0x81, 0x02,                      /*   INPUT (Data,Var,Abs) */
+  D_COLLECTION, D_APPLICATION,
+  // Modifiers
+  D_USAGE_PAGE, D_PAGE_KEYBOARD,
+  D_USAGE_MINIMUM, 0xe0,
+  D_USAGE_MAXIMUM, 0xe7,
+  D_LOGICAL_MINIMUM, 0x0,
+  D_LOGICAL_MAXIMUM, 0x1,
+  D_REPORT_SIZE, 0x1,
+  D_REPORT_COUNT, 0x8,
+  D_INPUT, (D_DATA|D_VARIABLE|D_ABSOLUTE),
 
-  /* 5 LEDs for num lock etc, 3 left for advanced, custom usage */
-  0x05, 0x08,						 /*   USAGE_PAGE (LEDs) */
-  0x19, 0x01,						 /*   USAGE_MINIMUM (Num Lock) */
-  0x29, 0x08,						 /*   USAGE_MAXIMUM (Kana + 3 custom)*/
-  0x95, 0x08,						 /*   REPORT_COUNT (8) */
-  0x75, 0x01,						 /*   REPORT_SIZE (1) */
-  0x91, 0x02,						 /*   OUTPUT (Data,Var,Abs) */
+  // Reserved byte
+  D_REPORT_COUNT, 0x1,
+  D_REPORT_SIZE, 0x8,
+  D_INPUT, (D_CONSTANT),
 
-  /* 6 Keyboard keys */
-  0x05, 0x07,                      /*   USAGE_PAGE (Keyboard) */
-  0x95, 0x06,                      /*   REPORT_COUNT (6) */
-  0x75, 0x08,                      /*   REPORT_SIZE (8) */
-  0x15, 0x00,                      /*   LOGICAL_MINIMUM (0) */
-  0x26, 0xE7, 0x00,                /*   LOGICAL_MAXIMUM (231) */
-  0x19, 0x00,                      /*   USAGE_MINIMUM (Reserved (no event indicated)) */
-  0x29, 0xE7,                      /*   USAGE_MAXIMUM (Keyboard Right GUI) */
-  0x81, 0x00,                      /*   INPUT (Data,Ary,Abs) */
+  // LEDs
+  D_REPORT_COUNT, 0x5,
+  D_REPORT_SIZE, 0x1,
+  D_USAGE_PAGE, D_PAGE_LEDS,
+  D_USAGE_MINIMUM, 0x1,
+  D_USAGE_MAXIMUM, 0x5,
+  D_OUTPUT, (D_DATA|D_VARIABLE|D_ABSOLUTE),
+  // Pad LEDs up to a byte
+  D_REPORT_COUNT, 0x1,
+  D_REPORT_SIZE, 0x3,
+  D_OUTPUT, (D_CONSTANT),
 
-  /* End */
-  0xc0                            /* END_COLLECTION */
+  // Non-modifiers
+  D_REPORT_COUNT, 0x6,
+  D_REPORT_SIZE, 0x8,
+  D_LOGICAL_MINIMUM, 0x0,
+  D_LOGICAL_MAXIMUM, 0xff,
+  D_USAGE_PAGE, D_PAGE_KEYBOARD,
+  D_USAGE_MINIMUM, 0x0,
+  D_USAGE_MAXIMUM, 0xff,
+  D_INPUT, (D_DATA|D_ARRAY|D_ABSOLUTE),
+  D_END_COLLECTION
 };
 
 #ifdef __SAMD21G18A__
@@ -73,7 +82,6 @@ static const uint8_t _hidReportDescriptorKeyboard[] PROGMEM = {
 
 BootKeyboard_::BootKeyboard_(void) : PluggableUSBModule(1, 1, epType), protocol(HID_REPORT_PROTOCOL), idle(1), leds(0) {
   epType[0] = EP_TYPE_INTERRUPT_IN;
-  PluggableUSB().plug(this);
 }
 
 int BootKeyboard_::getInterface(uint8_t* interfaceCount) {
@@ -109,6 +117,8 @@ int BootKeyboard_::getDescriptor(USBSetup& setup) {
 
 
 void BootKeyboard_::begin(void) {
+  PluggableUSB().plug(this);
+
   // Force API to send a clean report.
   // This is important for and HID bridge where the receiver stays on,
   // while the sender is resetted.
@@ -162,7 +172,14 @@ bool BootKeyboard_::setup(USBSetup& setup) {
       return true;
     }
     if (request == HID_SET_IDLE) {
+      // We currently ignore SET_IDLE, because we don't really do anything with it, and implementing
+      // it causes issues on OSX, such as key chatter. Other operating systems do not suffer if we
+      // force this to zero, either.
+#if 0
       idle = setup.wValueL;
+#else
+      idle = 0;
+#endif
       return true;
     }
     if (request == HID_SET_REPORT) {
@@ -259,7 +276,7 @@ size_t BootKeyboard_::press(uint8_t k) {
 size_t BootKeyboard_::release(uint8_t k) {
   if ((k >= HID_KEYBOARD_FIRST_MODIFIER) && (k <= HID_KEYBOARD_LAST_MODIFIER)) {
     // it's a modifier key
-    _keyReport.modifiers = _keyReport.modifiers & (~(0x01 << (k - HID_KEYBOARD_LAST_MODIFIER)));
+    _keyReport.modifiers = _keyReport.modifiers & (~(0x01 << (k - HID_KEYBOARD_FIRST_MODIFIER)));
   } else {
     // it's some other key:
     // Test the key report to see if k is present.  Clear it if it exists.
@@ -293,7 +310,7 @@ size_t BootKeyboard_::release(uint8_t k) {
 
 
 void BootKeyboard_::releaseAll(void) {
-  memset(&_keyReport.keys, 0x00, sizeof(_keyReport.keys));
+  memset(&_keyReport.bytes, 0x00, sizeof(_keyReport.bytes));
 }
 
 /* Returns true if the modifer key passed in will be sent during this key report
